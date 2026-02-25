@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+
+{% block title %}Launch Instance - VisualForm{% endblock %}
+
+{% block content %}
+<div class="launch-container">
+    <h1>Launch New EC2 Instance</h1>
+    
+    <div class="launch-box">
+        <form id="launchForm" onsubmit="handleSubmit(event)">
+            <div class="form-group">
+                <label for="name">Instance Name:</label>
+                <input type="text" id="name" name="name" required placeholder="e.g., web-server-01">
+            </div>
+            
+            <div class="form-group">
+                <label for="image_id">AMI ID (Image ID):</label>
+                <input type="text" id="image_id" name="image_id" required placeholder="e.g., ami-0c55b159cbfafe1f0">
+                <small>Find AMI IDs in AWS Console. Popular: Ubuntu 22.04 LTS (ami-0c55b159cbfafe1f0)</small>
+            </div>
+            
+            <div class="form-group">
+                <label for="instance_type">Instance Type:</label>
+                <select id="instance_type" name="instance_type" required>
+                    <option value="">Select Instance Type</option>
+                    <option value="t2.micro">t2.micro (Free tier eligible)</option>
+                    <option value="t2.small">t2.small</option>
+                    <option value="t2.medium">t2.medium</option>
+                    <option value="t3.micro">t3.micro</option>
+                    <option value="t3.small">t3.small</option>
+                    <option value="m5.large">m5.large</option>
+                    <option value="m5.xlarge">m5.xlarge</option>
+                </select>
+            </div>
+            
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">Launch Instance</button>
+                <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">Back to Dashboard</a>
+            </div>
+        </form>
+    </div>
+    
+    <div id="resultMessage" class="alert" style="display: none;"></div>
+</div>
+
+<script>
+function handleSubmit(event) {
+    event.preventDefault();
+    
+    const name = document.getElementById('name').value;
+    const image_id = document.getElementById('image_id').value;
+    const instance_type = document.getElementById('instance_type').value;
+    
+    const resultDiv = document.getElementById('resultMessage');
+    resultDiv.style.display = 'block';
+    resultDiv.textContent = 'Launching instance...';
+    resultDiv.className = 'alert alert-info';
+    
+    fetch('/api/launch-instance', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            name: name,
+            image_id: image_id,
+            instance_type: instance_type
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            resultDiv.textContent = 'Success! ' + data.message;
+            resultDiv.className = 'alert alert-success';
+            setTimeout(() => {
+                window.location.href = '{{ url_for("dashboard") }}';
+            }, 2000);
+        } else {
+            resultDiv.textContent = 'Error: ' + data.message;
+            resultDiv.className = 'alert alert-error';
+        }
+    })
+    .catch(error => {
+        resultDiv.textContent = 'Error: ' + error;
+        resultDiv.className = 'alert alert-error';
+    });
+}
+</script>
+{% endblock %}

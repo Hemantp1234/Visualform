@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - VisualForm{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+    <div class="dashboard-header">
+        <h1>EC2 Instance Dashboard</h1>
+        <a href="{{ url_for('launch_form') }}" class="btn btn-primary">Launch New Instance</a>
+    </div>
+    
+    <div class="instances-grid">
+        {% if instances %}
+            {% for instance in instances %}
+                <div class="instance-card">
+                    <div class="card-header">
+                        <h3>{{ instance.name }}</h3>
+                        <span class="badge badge-{{ instance.state }}">{{ instance.state }}</span>
+                    </div>
+                    <div class="card-body">
+                        <p><strong>Instance ID:</strong> <code>{{ instance.instance_id }}</code></p>
+                        <p><strong>Type:</strong> {{ instance.instance_type }}</p>
+                        <p><strong>Launch Time:</strong> {{ instance.launch_time }}</p>
+                        <p><strong>Public IP:</strong> {{ instance.public_ip }}</p>
+                        <p><strong>Private IP:</strong> {{ instance.private_ip }}</p>
+                    </div>
+                    <div class="card-footer">
+                        {% if instance.state != 'terminated' %}
+                            <button class="btn btn-danger" onclick="terminateInstance('{{ instance.instance_id }}', '{{ instance.name }}')">Terminate</button>
+                        {% endif %}
+                    </div>
+                </div>
+            {% endfor %}
+        {% else %}
+            <div class="empty-state">
+                <p>No instances running</p>
+                <a href="{{ url_for('launch_form') }}" class="btn btn-primary">Launch First Instance</a>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+function terminateInstance(instanceId, instanceName) {
+    if (confirm(`Are you sure you want to terminate "${instanceName}" (${instanceId})?`)) {
+        fetch('/api/terminate-instance', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ instance_id: instanceId })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Instance termination initiated');
+                location.reload();
+            } else {
+                alert('Error: ' + data.message);
+            }
+        })
+        .catch(error => alert('Error: ' + error));
+    }
+}
+
+// Auto-refresh instances every 30 seconds
+setInterval(function() {
+    location.reload();
+}, 30000);
+</script>
+{% endblock %}
