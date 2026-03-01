@@ -30,97 +30,6 @@ class AWSManager:
             aws_secret_access_key=secret_key
         )
     
-    def launch_instance(self, image_id, instance_type, name, dry_run=False):
-        """
-        Launch an EC2 instance with the specified parameters.
-        
-        Args:
-            image_id: AMI ID (e.g., 'ami-0c55b159cbfafe1f0')
-            instance_type: Instance type (e.g., 't2.micro', 't2.small')
-            name: Name tag for the instance
-            dry_run: If True, validates permissions without creating instance
-        
-        Returns:
-            dict: {'success': bool, 'instance_id': str, 'message': str}
-        """
-        try:
-            # Validate instance type is available in region
-            if not self._is_instance_type_available(instance_type):
-                return {
-                    'success': False,
-                    'instance_id': None,
-                    'message': f'Instance type {instance_type} not available in region {self.region}'
-                }
-            
-            instances = self.ec2_client.run_instances(
-                ImageId=image_id,
-                MinCount=1,
-                MaxCount=1,
-                InstanceType=instance_type,
-                TagSpecifications=[
-                    {
-                        'ResourceType': 'instance',
-                        'Tags': [{'Key': 'Name', 'Value': name}]
-                    }
-                ],
-                DryRun=dry_run
-            )
-            
-            instance_id = instances['Instances'][0]['InstanceId']
-            
-            return {
-                'success': True,
-                'instance_id': instance_id,
-                'message': f'Instance {instance_id} launched successfully with name "{name}"'
-            }
-        
-        except ClientError as e:
-            error_code = e.response['Error']['Code']
-            if error_code == 'DryRunOperation':
-                return {
-                    'success': True,
-                    'instance_id': None,
-                    'message': 'DryRun validation passed - credentials are valid'
-                }
-            else:
-                return {
-                    'success': False,
-                    'instance_id': None,
-                    'message': f'Error launching instance: {e.response["Error"]["Message"]}'
-                }
-        except Exception as e:
-            return {
-                'success': False,
-                'instance_id': None,
-                'message': f'Unexpected error: {str(e)}'
-            }
-    
-    def terminate_instance(self, instance_id):
-        """
-        Terminate a specific EC2 instance.
-        
-        Args:
-            instance_id: The instance ID to terminate
-        
-        Returns:
-            dict: {'success': bool, 'message': str}
-        """
-        try:
-            self.ec2_client.terminate_instances(InstanceIds=[instance_id])
-            return {
-                'success': True,
-                'message': f'Instance {instance_id} termination initiated'
-            }
-        except ClientError as e:
-            return {
-                'success': False,
-                'message': f'Error terminating instance: {e.response["Error"]["Message"]}'
-            }
-        except Exception as e:
-            return {
-                'success': False,
-                'message': f'Unexpected error: {str(e)}'
-            }
     
     def get_all_instances(self):
         """
@@ -166,6 +75,109 @@ class AWSManager:
             print(f'Error retrieving instances: {e}')
             return []
     
+    def get_key_pairs(self):
+        """
+        Get all available EC2 Key Pairs in the region.
+        
+        Returns:
+            list: List of key pair names
+        """
+        try:
+            response = self.ec2_client.describe_key_pairs()
+            return [kp['KeyName'] for kp in response['KeyPairs']]
+        except ClientError:
+            return []
+    
+    def get_security_groups(self):
+        """
+        Get all available security groups in the region.
+        
+        Returns:
+            list: List of dicts with 'GroupId' and 'GroupName'
+        """
+        try:
+            response = self.ec2_client.describe_security_groups()
+            return [
+                {
+                    'GroupId': sg['GroupId'],
+                    'GroupName': sg['GroupName'],
+                    'Description': sg.get('Description', '')
+                }
+                for sg in response['SecurityGroups']
+            ]
+        except ClientError:
+            return []
+    
+    def get_subnets(self):
+        """
+        Get all available subnets in the region.
+        
+        Returns:
+            list: List of dicts with 'SubnetId', 'VpcId', 'CidrBlock', 'AvailabilityZone'
+        """
+        try:
+            response = self.ec2_client.describe_subnets()
+            return [
+                {
+                    'SubnetId': subnet['SubnetId'],
+                    'VpcId': subnet['VpcId'],
+                    'CidrBlock': subnet['CidrBlock'],
+                    'AvailabilityZone': subnet['AvailabilityZone'],
+                    'AvailableIpAddressCount': subnet['AvailableIpAddressCount']
+                }
+                for subnet in response['Subnets']
+            ]
+        except ClientError:
+            return []
+    
+    def get_iam_roles(self):
+        """
+        Get all available IAM roles that can be used with EC2 instances.
+        
+        Returns:
+            list: List of role names
+        """
+        try:
+            iam_client = boto3.client('iam')
+            response = iam_client.list_roles()
+            return [role['RoleName'] for role in response['Roles']]
+        except ClientError:
+            return []
+    
+    def get_available_instance_types(self, instance_family='t'):
+        """
+        Get all available instance types in the current region.
+        Optionally filter by instance family (e.g., 't' for t2/t3, 'm' for m5, etc.)
+        
+        Returns:
+            list: List of instance type strings (e.g., ['t2.micro', 't2.small', 't3.micro'])
+        """
+        try:
+            # Use InstanceTypeFilter to get available types for a family
+            response = self.ec2_client.describe_instance_types(
+                Filters=[
+                    {
+                        'Name': 'instance-type',
+                        'Values': [f'{instance_family}*.micro', f'{instance_family}*.small', f'{instance_family}*.medium', f'{instance_family}*.large', f'{instance_family}*.xlarge', f'{instance_family}*.2xlarge']
+                    }
+                ]
+            )
+            instance_types = sorted([it['InstanceType'] for it in response['InstanceTypes']])
+            return instance_types
+        except ClientError:
+            # If filtering fails, try a broader approach - describe all and filter locally
+            try:
+                response = self.ec2_client.describe_instance_types()
+                instance_types = sorted([
+                    it['InstanceType'] 
+                    for it in response['InstanceTypes'] 
+                    if it['InstanceType'].startswith(instance_family)
+                ])
+                return instance_types
+            except ClientError:
+                # Fallback to common instance types
+                return ['t2.micro', 't2.small', 't2.medium', 't3.micro', 't3.small']
+    
     def _is_instance_type_available(self, instance_type):
         """
         Check if an instance type is available in the current region.
@@ -177,17 +189,20 @@ class AWSManager:
             bool: True if available, False otherwise
         """
         try:
+            # Use InstanceTypes parameter instead of Filters for more reliable checking
             response = self.ec2_client.describe_instance_types(
-                Filters=[
-                    {
-                        'Name': 'instance-type',
-                        'Values': [instance_type]
-                    }
-                ]
+                InstanceTypes=[instance_type]
             )
+            # If we got a response with the instance type, it's available
             return len(response['InstanceTypes']) > 0
-        except ClientError:
-            # If we can't verify, assume it's available (let AWS reject it)
+        except ClientError as e:
+            # If there's an error, it could be invalid instance type or permission issue
+            # In either case, return False and let the user know
+            error_code = e.response['Error']['Code']
+            if error_code == 'InvalidParameterValue':
+                # Instance type doesn't exist in this region
+                return False
+            # For other errors, allow it to proceed (permission issues, etc)
             return True
 
 

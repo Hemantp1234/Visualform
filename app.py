@@ -136,62 +136,7 @@ def dashboard():
     return render_template('dashboard.html', instances=instances)
 
 
-@app.route('/launch-form')
-@login_required
-def launch_form():
-    creds = current_user.get_aws_credentials(current_user.password_hash)
-    
-    if not creds:
-        flash('Please configure AWS credentials first', 'warning')
-        return redirect(url_for('manage_credentials'))
-    
-    return render_template('launch_form.html', region=creds['region'])
 
-
-@app.route('/api/launch-instance', methods=['POST'])
-@login_required
-def api_launch_instance():
-    creds = current_user.get_aws_credentials(current_user.password_hash)
-    
-    if not creds:
-        return jsonify({'success': False, 'message': 'AWS credentials not configured'})
-    
-    data = request.get_json()
-    image_id = data.get('image_id')
-    instance_type = data.get('instance_type')
-    name = data.get('name')
-    
-    if not all([image_id, instance_type, name]):
-        return jsonify({'success': False, 'message': 'Missing required parameters'})
-    
-    try:
-        manager = AWSManager(creds['access_key'], creds['secret_key'], creds['region'])
-        result = manager.launch_instance(image_id, instance_type, name)
-        return jsonify(result)
-    except Exception as e:
-        return jsonify({'success': False, 'message': f'Error: {str(e)}'})
-
-
-@app.route('/api/terminate-instance', methods=['POST'])
-@login_required
-def api_terminate_instance():
-    creds = current_user.get_aws_credentials(current_user.password_hash)
-    
-    if not creds:
-        return jsonify({'success': False, 'message': 'AWS credentials not configured'})
-    
-    data = request.get_json()
-    instance_id = data.get('instance_id')
-    
-    if not instance_id:
-        return jsonify({'success': False, 'message': 'Instance ID is required'})
-    
-    try:
-        manager = AWSManager(creds['access_key'], creds['secret_key'], creds['region'])
-        result = manager.terminate_instance(instance_id)
-        return jsonify(result)
-    except Exception as e:
-        return jsonify({'success': False, 'message': f'Error: {str(e)}'})
 
 
 @app.route('/api/instances')
@@ -210,7 +155,89 @@ def api_get_instances():
         return jsonify({'error': str(e)})
 
 
+@app.route('/api/key-pairs')
+@login_required
+def api_get_key_pairs():
+    creds = current_user.get_aws_credentials(current_user.password_hash)
+    
+    if not creds:
+        return jsonify([])
+    
+    try:
+        manager = AWSManager(creds['access_key'], creds['secret_key'], creds['region'])
+        key_pairs = manager.get_key_pairs()
+        return jsonify(key_pairs)
+    except Exception as e:
+        return jsonify({'error': str(e)})
+
+
+@app.route('/api/security-groups')
+@login_required
+def api_get_security_groups():
+    creds = current_user.get_aws_credentials(current_user.password_hash)
+    
+    if not creds:
+        return jsonify([])
+    
+    try:
+        manager = AWSManager(creds['access_key'], creds['secret_key'], creds['region'])
+        security_groups = manager.get_security_groups()
+        return jsonify(security_groups)
+    except Exception as e:
+        return jsonify({'error': str(e)})
+
+
+@app.route('/api/subnets')
+@login_required
+def api_get_subnets():
+    creds = current_user.get_aws_credentials(current_user.password_hash)
+    
+    if not creds:
+        return jsonify([])
+    
+    try:
+        manager = AWSManager(creds['access_key'], creds['secret_key'], creds['region'])
+        subnets = manager.get_subnets()
+        return jsonify(subnets)
+    except Exception as e:
+        return jsonify({'error': str(e)})
+
+
+@app.route('/api/iam-roles')
+@login_required
+def api_get_iam_roles():
+    creds = current_user.get_aws_credentials(current_user.password_hash)
+    
+    if not creds:
+        return jsonify([])
+    
+    try:
+        manager = AWSManager(creds['access_key'], creds['secret_key'], creds['region'])
+        iam_roles = manager.get_iam_roles()
+        return jsonify(iam_roles)
+    except Exception as e:
+        return jsonify({'error': str(e)})
+
+
+@app.route('/api/instance-types')
+@login_required
+def api_get_instance_types():
+    creds = current_user.get_aws_credentials(current_user.password_hash)
+    
+    if not creds:
+        return jsonify([])
+    
+    instance_family = request.args.get('family', 't')
+    
+    try:
+        manager = AWSManager(creds['access_key'], creds['secret_key'], creds['region'])
+        instance_types = manager.get_available_instance_types(instance_family)
+        return jsonify(instance_types)
+    except Exception as e:
+        return jsonify({'error': str(e)})
+
+
 if __name__ == '__main__':
     with app.app_context():
         init_db(app)
-    app.run(debug=True)
+    app.run(debug=True, port=5001)
