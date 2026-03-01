@@ -1,16 +1,16 @@
-# VisualForm - AWS EC2 Instance Manager
+# VisualForm - AWS EC2 Instance Monitor
 
-A Flask web application that lets users manage AWS EC2 instances through an interactive GUI instead of Infrastructure-as-Code tools. This replaces Terraform for simple instance lifecycle management with a "Live State Engine."
+A Flask web application that provides a developer-friendly interface to view and monitor AWS EC2 instances. This is a **read-only monitoring tool** designed for developers to visualize their AWS resources without the ability to create or terminate instances.
 
 ## Features
 
 ✅ **User Authentication** - Secure login/register system with password hashing  
 ✅ **Encrypted Credentials** - AWS keys encrypted at rest using per-user Master Keys (PBKDF2 + Fernet)  
-✅ **EC2 Dashboard** - Real-time list of all instances with status badges  
-✅ **Launch Instances** - Create instances via form (no HCL needed)  
-✅ **Terminate Instances** - Click-to-terminate with confirmation  
-✅ **Instance Type Validation** - Checks availability before launching  
-✅ **Multi-region Support** - Manage instances across AWS regions  
+✅ **EC2 Dashboard** - Real-time list of all instances with detailed status information  
+✅ **Instance Details** - View instance IDs, types, states, public/private IPs, and launch times  
+✅ **Available Resources** - View key pairs, security groups, subnets, IAM roles, and instance types  
+✅ **Multi-region Support** - Monitor instances across AWS regions  
+✅ **Auto-refresh** - Dashboard updates every 30 seconds with latest instance data
 
 ## Project Structure
 
@@ -25,8 +25,7 @@ visualform/
 │   ├── login.html         # Login page
 │   ├── register.html      # Registration page
 │   ├── credentials.html   # AWS credentials form
-│   ├── dashboard.html     # Instance dashboard (Live Map)
-│   └── launch_form.html   # Create instance form
+│   └── dashboard.html     # Instance dashboard (read-only monitoring)
 ├── static/
 │   └── css/
 │       └── style.css      # Responsive styling
@@ -106,48 +105,21 @@ Navigate to `http://localhost:5000` in your browser.
 - Enter AWS Access Key, Secret Key, and region
 - Credentials are validated and encrypted
 
-### Step 3: Launch Instances
-- Click "Launch New Instance" from dashboard
-- Fill form (AMI ID, instance type, name)
-- Click "Launch Instance"
-- Instance appears on dashboard in ~30 seconds
+### Step 3: View Instances
+- Navigate to "Dashboard" to see all EC2 instances
+- View detailed information: instance ID, type, state, IPs, launch time
+- Dashboard auto-refreshes every 30 seconds with latest data
+- Browse available resources: key pairs, security groups, subnets, IAM roles, instance types
 
-### Step 4: Terminate Instances
-- On dashboard, find instance card
-- Click "Terminate" button
-- Confirm termination
-- Instance state changes to "terminated"
+## Use Cases
 
-## How It Replaces Terraform
+VisualForm is perfect for:
+- **Developers** - Quickly view your EC2 instances without AWS console navigation
+- **DevOps Teams** - Monitor instances across multiple AWS regions from one dashboard
+- **Learning** - Understand AWS resource relationships and current deployments
+- **Audit** - View what resources currently exist in your AWS account
 
-| Feature | Terraform | VisualForm |
-|---------|-----------|-----------|
-| Configuration | HCL (text) | GUI (forms) |
-| State Management | `.tfstate` file | Live AWS query |
-| Plan/Apply | 2 steps | 1 click |
-| Learning Curve | High (HCL syntax) | Low (web forms) |
-| Instant Feedback | No (plan step) | Yes (auto-refresh) |
-| Multi-user Support | Manual setup | Built-in |
-
-**Example Comparison:**
-
-Terraform:
-```hcl
-resource "aws_instance" "web" {
-  ami           = "ami-0c55b159cbfafe1f0"
-  instance_type = "t2.micro"
-  tags = { Name = "web-server" }
-}
-terraform plan
-terraform apply
-```
-
-VisualForm:
-```
-1. Fill form on web page
-2. Click "Launch Instance"
-3. Done (auto-refresh shows new instance)
-```
+**Note:** This is a **read-only monitoring tool**. Resource creation and deletion are intentionally disabled to prevent accidental changes. Use AWS Console, Terraform, or CloudFormation for infrastructure changes.
 
 ## AWS Credentials
 
@@ -161,7 +133,7 @@ VisualForm:
 6. Copy the Access Key ID and Secret Access Key
 7. Use them in VisualForm
 
-### Minimal IAM Policy
+### Minimal IAM Policy (Read-Only)
 
 ```json
 {
@@ -172,15 +144,18 @@ VisualForm:
       "Action": [
         "ec2:DescribeInstances",
         "ec2:DescribeInstanceTypes",
-        "ec2:RunInstances",
-        "ec2:TerminateInstances",
-        "ec2:CreateTags"
+        "ec2:DescribeKeyPairs",
+        "ec2:DescribeSecurityGroups",
+        "ec2:DescribeSubnets",
+        "iam:ListRoles"
       ],
       "Resource": "*"
     }
   ]
 }
 ```
+
+**This policy is read-only and prevents accidental resource modifications.**
 
 ## API Endpoints
 
@@ -190,11 +165,13 @@ VisualForm:
 | `/login` | GET/POST | Login |
 | `/logout` | POST | Logout |
 | `/credentials` | GET/POST | Manage AWS credentials |
-| `/dashboard` | GET | View all instances |
-| `/launch-form` | GET | Launch instance form |
-| `/api/launch-instance` | POST | Create instance (JSON) |
-| `/api/terminate-instance` | POST | Terminate instance (JSON) |
+| `/dashboard` | GET | View all instances (read-only) |
 | `/api/instances` | GET | Get instances as JSON |
+| `/api/key-pairs` | GET | Get available key pairs |
+| `/api/security-groups` | GET | Get security groups |
+| `/api/subnets` | GET | Get VPC subnets |
+| `/api/iam-roles` | GET | Get IAM roles |
+| `/api/instance-types` | GET | Get available instance types |
 
 ## Development Notes
 
@@ -234,27 +211,29 @@ See AWS documentation for Flask deployment best practices.
 
 ### "Invalid AWS credentials" Error
 - Verify Access Key ID and Secret Key are correct
-- Check IAM user has required permissions
+- Check IAM user has **read-only permissions** (see IAM Policy section)
 - Ensure region is valid
-
-### "Instance type not available"
-- Instance type not available in selected region
-- Try t2.micro (most widely available)
 
 ### "No instances showing"
 - Dashboard auto-refreshes every 30 seconds
-- Try manual refresh if instances take longer to appear
+- Verify AWS credentials are saved in the credentials page
+- Check that you have instances running in the selected region
+- Verify IAM permissions include `ec2:DescribeInstances`
+
+### "Connection timeout" Error
+- Check your network connectivity to AWS
+- Verify AWS region is correct
+- Check IAM role/user is not rate-limited
 
 ## Future Enhancements
 
-- [ ] RDS database management interface
-- [ ] S3 bucket browser
-- [ ] CloudFormation template builder
-- [ ] Cost estimator
-- [ ] Scheduled snapshots
-- [ ] Instance metrics dashboard (CPU, memory)
-- [ ] Bulk instance operations
-- [ ] Backup/restore interface
+- [ ] RDS instance browser (read-only)
+- [ ] S3 bucket viewer (read-only)
+- [ ] CloudFormation stack viewer (read-only)
+- [ ] Cost analyzer and estimator
+- [ ] Instance metrics dashboard (CPU, memory from CloudWatch)
+- [ ] VPC and network topology visualization
+- [ ] Export instance data to CSV/JSON
 
 ## License
 
